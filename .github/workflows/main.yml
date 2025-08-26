@@ -1,31 +1,34 @@
-name: Container Signing
+name: CI/CD with Signing
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
 
 jobs:
-  sign-container:
+  build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+    - uses: actions/checkout@v3
 
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+    - name: Set up Docker
+      uses: docker/setup-buildx-action@v2
 
-      - name: Build and push Docker image
-        run: |
-          docker build -t ghcr.io/${{ github.repository }}/myapp:latest .
-          docker push ghcr.io/${{ github.repository }}/myapp:latest
+    - name: Build Docker image
+      run: docker build -t ghcr.io/${{ github.repository_owner }}/myapp:latest .
 
-      - name: Sign Docker image
-        run: |
-          cosign sign ghcr.io/${{ github.repository }}/myapp:latest
-        env:
-          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+    - name: Push Docker image
+      run: docker push ghcr.io/${{ github.repository_owner }}/myapp:latest
+
+    - name: Install cosign
+      run: |
+        curl -LO https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64
+        chmod +x cosign-linux-amd64
+        mv cosign-linux-amd64 /usr/local/bin/cosign
+
+    - name: Sign Docker image
+      run: cosign sign ghcr.io/${{ github.repository_owner }}/myapp:latest --key ${{ secrets.COSIGN_KEY }}
+
+    - name: Verify Docker image
+      run: cosign verify --key cosign.pub ghcr.io/${{ github.repository_owner }}/myapp:latest
+
